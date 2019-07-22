@@ -1,4 +1,4 @@
-﻿# encoding:utf-8
+# encoding:utf-8
 
 import sys
 import importlib
@@ -12,24 +12,27 @@ from pdfminer.layout import LTTextBoxHorizontal,LAParams
 from pdfminer.pdfinterp import PDFTextExtractionNotAllowed
 
 error_file = open('./error.txt', 'w')
+parse_error_file = open('./parse_error.txt', 'w')
 '''
  解析pdf 文本，保存到txt文件中
 '''
 def parse(pdf_file):
     fp = open(pdf_file, 'rb') # 以二进制读模式打开
     # 用文件对象来创建一个pdf文档分析器
-    praser = PDFParser(fp)
-    # 创建一个PDF文档
-    doc = PDFDocument()
-    # 连接分析器 与文档对象
-    praser.set_document(doc)
-    doc.set_parser(praser)
+    try:
+        praser = PDFParser(fp)
+        # 创建一个PDF文档
+        doc = PDFDocument()
+        # 连接分析器 与文档对象
+        praser.set_document(doc)
+        doc.set_parser(praser)
     
-    txtfile_name = pdf_file[:-4]+'.txt'
-    # 提供初始化密码
-    # 如果没有密码 就创建一个空的字符串
-    doc.initialize()
-
+        # 提供初始化密码
+        # 如果没有密码 就创建一个空的字符串
+        doc.initialize()
+    except Exception as e:
+        parse_error_file.write(pdf_file+'\n')
+        return
     # 检测文档是否提供txt转换，不提供就忽略
     if not doc.is_extractable:
         raise PDFTextExtractionNotAllowed
@@ -41,11 +44,16 @@ def parse(pdf_file):
         device = PDFPageAggregator(rsrcmgr, laparams=laparams)
         # 创建一个PDF解释器对象
         interpreter = PDFPageInterpreter(rsrcmgr, device)
-
+        try:
+            pages = list(doc.get_pages())
+        except Exception as e:
+            parse_error_file.write(pdf_file+'\n')
+            return 
         results = ""
-        with open(txtfile_name, 'w', encoding='utf-8') as f:
-            # 循环遍历列表，每次处理一个page的内容
-            for page in list(doc.get_pages())[8:50]: # doc.get_pages() 获取page列表
+        print(f"pages num is {dir(doc.get_pages())}")
+        # 循环遍历列表，每次处理一个page的内容
+        for page in pages[6:60]: # doc.get_pages() 获取page列表
+            try:
                 interpreter.process_page(page)
                 # 接受该页面的LTPage对象
                 layout = device.get_result()
@@ -53,21 +61,24 @@ def parse(pdf_file):
                 for x in layout:
                     if (isinstance(x, LTTextBoxHorizontal)):
                         results += x.get_text()
-                        #page.extract_text()函数即读取文本内容，下面这步是去掉文档最下面的页码
-                        #page_content = '\n'.join(page.extract_text().split('\n')[:-1])
-                        # print(results)
-            begin = results.find(u"第四节 经营") if results.find(u"第四节")>0 else 0
-            end = results.find(u"第五节 重要") if results.find(u"第五节")>0 else len(results)
-            results = results[begin:end]
-            begin = results.find(u"九、公司未来") 
-            # end = results.find(u"十、") if results.find(u"十、")>0 else len(results)
-            if results.find(u"九、公司未来")>0:
-                # results += results[begin:end]
-                pass
-            else:
-                error_file.write(pdf_file+'\n')
-            f.write(results)
-            print(f"Succefully writing content into the {txtfile_name} file.")
+                        # print(x.get_text())
+            except Exception as e:
+                pass 
+
+        if len(results)>0:
+            txtfile_name = pdf_file[:-4]+'.txt'
+            with open(txtfile_name, 'w', encoding='utf-8') as f:
+
+                begin = results.find(u"第四节 经营") if results.find(u"第四节 经营")>0 else 0
+                end = results.find(u"第五节 重要") if results.find(u"第五节 重要")>0 else len(results)
+                print(f"begin is {begin}, end is {end}")
+                if results.find(u"九、公司未来")<0:
+                    error_file.write(pdf_file+'\n')            
+                f.write(results[begin:end])
+                print(f"Succefully writing content into the {txtfile_name} file.")
+        else:
+            parse_error_file.write(pdf_file+'\n')
+            
 
 def parse_pdfs(m_dir='./annual_report'):
 	pdf_files = glob.glob(m_dir+'/*.pdf')
@@ -77,4 +88,4 @@ def parse_pdfs(m_dir='./annual_report'):
 
 if __name__ == '__main__':
 	# print(parse('fw9.pdf'))
-	parse_pdfs()
+	parse_pdfs(m_dir='./annual_report2016')
